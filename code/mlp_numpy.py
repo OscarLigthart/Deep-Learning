@@ -37,10 +37,16 @@ class MLP(object):
     #######################
     # PUT YOUR CODE HERE  #
     #######################
+    # use for loop
+    self.layers = []
+    for nodes in n_hidden:
+      self.layers.append(LinearModule(n_inputs, nodes))
+      n_inputs = nodes
 
-    self.l1 = LinearModule(n_inputs, n_hidden)
+    self.layers.append(LinearModule(n_inputs, n_classes))
+
     self.reLU = ReLUModule()
-    self.l2 = LinearModule(n_hidden, n_classes)
+    self.softMax = SoftMaxModule()
 
 
     #######################
@@ -64,10 +70,12 @@ class MLP(object):
     ########################
     # PUT YOUR CODE HERE  #
     #######################
+    for layer  in self.layers:
+      x = layer.forward(x)
+      x = self.reLU.forward(x)
 
-    x = self.l1(x)
-    x = self.ReLU(x)
-    out = self.l2(x)
+    out = self.softMax.forward(x)
+
 
     ########################
     # END OF YOUR CODE    #
@@ -89,15 +97,19 @@ class MLP(object):
     ########################
     # PUT YOUR CODE HERE  #
     #######################
-    raise NotImplementedError
+    # reverse it
+    dout = self.crossEntropy.backward(dout)
+    dout = self.softMax.backward(dout)
+
+    rev_layer = self.layers.reverse()
+    for layer in self.layers:
+      dout = self.reLU.backward(dout)
+      dout = layer.backward(dout)
+
+
     ########################
     # END OF YOUR CODE    #
     #######################
 
     return
 
-net = MLP(5,5,2)
-print(net)
-labels = [0,1]
-input = np.random.rand(1,5)
-net.forward(input)

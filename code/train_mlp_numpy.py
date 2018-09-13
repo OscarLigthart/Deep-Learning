@@ -46,7 +46,19 @@ def accuracy(predictions, targets):
   ########################
   # PUT YOUR CODE HERE  #
   #######################
-  raise NotImplementedError
+
+  # use predictions and targets to
+  pred = np.amax(predictions, axis=1)
+
+  lab = np.amax(predictions, axis=1)
+  count = 0
+  for i in range(pred):
+    if pred[i] == lab[i]:
+      count += 1
+
+  accuracy = count/len(pred)
+
+
   ########################
   # END OF YOUR CODE    #
   #######################
@@ -76,7 +88,17 @@ def train():
   ########################
   # PUT YOUR CODE HERE  #
   #######################
-  raise NotImplementedError
+
+  # loop through data
+  X,Y = load_cifar10_batch(DATA_DIR_DEFAULT)
+
+  # create model
+  net = MLP()
+
+  # insert data
+
+  # update weights
+
   ########################
   # END OF YOUR CODE    #
   #######################

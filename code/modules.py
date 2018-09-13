@@ -28,12 +28,14 @@ class LinearModule(object):
     #######################
     mean = 0
     std_dev = 0.0001
-
+    print(in_features)
+    print(out_features)
     # create weight matrices
-    weight = np.random.normal(mean, std_dev, (in_features, out_features))
+    weight = np.random.normal(mean, std_dev, (out_features, in_features))
+    print(weight.shape)
     grad_weight = np.zeros((in_features, out_features))
 
-    # create biases
+    # create biases (in batches)
     bias = np.zeros(out_features)
     grad_bias = np.zeros(out_features)
 
@@ -63,8 +65,10 @@ class LinearModule(object):
     # PUT YOUR CODE HERE  #
     #######################
     # expand batch dimension
+    self.input = x
+    out = np.matmul(x, self.params['weight'].T) + np.expand_dims(self.params['bias'],0)
 
-    out = np.matmul(self.params['weight'], x) + self.params['bias']
+    self.value = out
 
     ########################
     # END OF YOUR CODE    #
@@ -89,7 +93,27 @@ class LinearModule(object):
     ########################
     # PUT YOUR CODE HERE  #
     #######################
-    raise NotImplementedError
+    # get dx
+    dx = np.matmul(dout, self.params['weight'])
+    #print('dout')
+    #print(dout.shape)
+
+    #print('dx')
+    #print(dx.shape) # check!
+
+    #print('weights')
+    #print(self.params['weight'].shape)
+
+    # get db
+    self.grads['bias'] = np.mean(np.matmul(dout, np.identity(len(self.params['bias']))),0)
+    #print('bias')
+    #print(self.grads['bias'].shape)
+
+    # get dW
+    self.grads['weight'] = np.matmul(dout.T, self.input)
+    #print('gradients')
+    #print(self.grads['weight'].shape)
+
     ########################
     # END OF YOUR CODE    #
     #######################
@@ -120,7 +144,8 @@ class ReLUModule(object):
     #######################
 
     out = np.maximum(np.zeros(x.shape), x)
-    print(out)
+    self.value = out
+
     ########################
     # END OF YOUR CODE    #
     #######################
@@ -132,7 +157,7 @@ class ReLUModule(object):
     Backward pass.
 
     Args:
-      dout: gradients of the previous modul
+      dout: gradients of the previous module
     Returns:
       dx: gradients with respect to the input of the module
     
@@ -143,11 +168,22 @@ class ReLUModule(object):
     ########################
     # PUT YOUR CODE HERE  #
     #######################
-    raise NotImplementedError
+
+    # 1 if > 0 and 0 if < 0
+
+    print(dout.shape)
+    #d = np.ones_like(dout)
+    ddout = np.zeros_like(self.value)
+
+
+    ddout[self.value > 0] = 1
+
+    dx = dout * ddout
+
     ########################
     # END OF YOUR CODE    #
     #######################    
-
+    print(dx.shape)
     return dx
 
 class SoftMaxModule(object):
@@ -172,6 +208,7 @@ class SoftMaxModule(object):
     ########################
     # PUT YOUR CODE HERE  #
     #######################
+
     # get maximum of each row
     b = x.max(1)
     b = np.expand_dims(b,1)
@@ -179,6 +216,9 @@ class SoftMaxModule(object):
 
     # apply softmax to each row
     out = (y.T / y.sum(1)).T
+    self.value = out
+    #print(out)
+    #print(out.shape)
 
     ########################
     # END OF YOUR CODE    #
@@ -191,7 +231,7 @@ class SoftMaxModule(object):
     Backward pass.
 
     Args:
-      dout: gradients of the previous modul
+      dout: gradients of the previous module
     Returns:
       dx: gradients with respect to the input of the module
     
@@ -203,7 +243,26 @@ class SoftMaxModule(object):
     # PUT YOUR CODE HERE  #
     #######################
 
-    
+    #SM = self.value.reshape((-1, 1))
+    #print(SM.shape)
+    # softmax output: self.value
+    print(self.value.shape)
+    # first create -SS matrix
+    #soft = np.expand_dims(self.value, 1)
+    soft = self.value
+    print(soft.shape)
+
+    ss1 = np.einsum('ij,ik->ijk', -soft, soft)
+
+    ss2 = np.einsum('ij,ik->ijk', soft, (np.ones_like(soft) - soft))
+
+    diag_ss2 = ss2.diagonal(0,1,2)
+
+    # overwrite diagonal
+    dimsize = np.size(ss1, 1)
+    ss1[:, np.diag_indices(dimsize)[0], np.diag_indices(dimsize)[1]] = ss2[:, np.diag_indices(dimsize)[0], np.diag_indices(dimsize)[1]]
+
+    dx = np.einsum('ij, ijk -> ik',dout, ss1)
 
 
     ########################
@@ -266,7 +325,7 @@ class CrossEntropyModule(object):
 
     return dx
 
-
+'''
 y = np.array([[0,1,0],
               [1,0,0],
               [1,0,0]])
@@ -275,9 +334,15 @@ x = np.array([[0.2,0.4,0.4],
               [0.3,0.3,0.3],
               [0.7,0.0,0.0]])
 
+x = np.array([[0.2,0.4,-0.4],
+              [0.3,-0.3,0.3],
+              [-0.7,0.0,-40.0]])
+
 a = np.array([0.2,0.4,0.4])
 b = np.array([0.3,0.3,0.3])
 
-loss = CrossEntropyModule()
-loss.forward(x, y)
+loss = ReLUModule()
+loss.forward(x)
+loss.backward(x)
 
+'''
