@@ -25,11 +25,3 @@ def softmax_grad(softmax):
 
 
 
-
-
-print(x.max())
-
-a = np.array([0, 3,2,4,7,5,8,3])
-b = np.array([0, 3,2,6,7,2,4,3])
-
-print(a.intersection(b))

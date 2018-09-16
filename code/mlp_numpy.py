@@ -43,10 +43,11 @@ class MLP(object):
       self.layers.append(LinearModule(n_inputs, nodes))
       n_inputs = nodes
 
-    self.layers.append(LinearModule(n_inputs, n_classes))
+    self.lastlayer = LinearModule(n_inputs, n_classes)
 
     self.reLU = ReLUModule()
     self.softMax = SoftMaxModule()
+
 
 
     #######################
@@ -70,9 +71,11 @@ class MLP(object):
     ########################
     # PUT YOUR CODE HERE  #
     #######################
-    for layer  in self.layers:
+    for layer in self.layers:
       x = layer.forward(x)
       x = self.reLU.forward(x)
+
+    x = self.lastlayer.forward(x)
 
     out = self.softMax.forward(x)
 
@@ -98,8 +101,9 @@ class MLP(object):
     # PUT YOUR CODE HERE  #
     #######################
     # reverse it
-    dout = self.crossEntropy.backward(dout)
     dout = self.softMax.backward(dout)
+
+    dout = self.lastlayer.backward(dout)
 
     rev_layer = self.layers.reverse()
     for layer in self.layers:

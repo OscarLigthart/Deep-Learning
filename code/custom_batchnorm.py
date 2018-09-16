@@ -37,7 +37,14 @@ class CustomBatchNormAutograd(nn.Module):
     ########################
     # PUT YOUR CODE HERE  #
     #######################
-    raise NotImplementedError
+
+    self.neurons = n_neurons
+    self.epsilon = eps
+
+    # initialize gamma and beta
+    self.gamma = nn.Parameter(torch.Tensor(np.ones(n_neurons)))
+    self.beta = nn.Parameter(torch.Tensor(np.zeros(n_neurons)))
+
     ########################
     # END OF YOUR CODE    #
     #######################
@@ -60,7 +67,15 @@ class CustomBatchNormAutograd(nn.Module):
     ########################
     # PUT YOUR CODE HERE  #
     #######################
-    raise NotImplementedError
+
+    input_mean = input.mean(0)
+
+    var = ((input-input_mean)**2).mean(0)
+
+    norm = (input-input_mean)/(var + self.epsilon).sqrt()
+
+    out = (self.gamma*norm) + self.beta
+
     ########################
     # END OF YOUR CODE    #
     #######################
@@ -114,7 +129,20 @@ class CustomBatchNormManualFunction(torch.autograd.Function):
     ########################
     # PUT YOUR CODE HERE  #
     #######################
-    raise NotImplementedError
+
+    N, D = input.shape
+    mu = input - ((1/N) * input.sum(0))
+
+    var = (1/N) * (mu.pow(2)).sum(0)
+
+    ivar = 1/(var+eps).sqrt()
+    xhat = mu * ivar
+
+    out = (gamma * xhat) + beta
+
+    ctx.save_for_backward(input, gamma, beta, mu, var, xhat, out)
+    ctx.eps = eps
+
     ########################
     # END OF YOUR CODE    #
     #######################
@@ -142,7 +170,40 @@ class CustomBatchNormManualFunction(torch.autograd.Function):
     ########################
     # PUT YOUR CODE HERE  #
     #######################
-    raise NotImplementedError
+    input, gamma, beta, mu, var, xhat, out = ctx.saved_tensors
+
+
+    ivar = 1/(var + ctx.eps).sqrt()
+    #print(grad_output.shape)
+    N,D = grad_output.shape
+    # get beta and gamma gradient
+    grad_beta = torch.sum(grad_output, 0)
+    grad_gamma = torch.sum((xhat * grad_output), 0)
+
+    # continue gradient of x
+    dxhat = gamma * grad_output #grad_x
+
+    # get the gradient wrt variance
+    divar = torch.sum(dxhat*mu, 0) #grad_var
+
+    # continue gradient of x
+    grad_x = ivar * dxhat
+
+    grad_var = divar * -1 / (var + ctx.eps)
+    grad_var = 0.5 * 1 / (var + ctx.eps).sqrt() * grad_var
+
+    grad_var = 1 / N * grad_var
+
+    grad_x2 = 2 * mu * grad_var
+
+    dx1 = grad_x + grad_x2
+
+    grad_mu = -1 * torch.sum(grad_x, 0)
+
+    dx2 = 1/ N * grad_mu
+
+    grad_input = dx1 + dx2
+
     ########################
     # END OF YOUR CODE    #
     #######################
@@ -180,7 +241,14 @@ class CustomBatchNormManualModule(nn.Module):
     ########################
     # PUT YOUR CODE HERE  #
     #######################
-    raise NotImplementedError
+    self.neurons = n_neurons
+    self.epsilon = eps
+
+    # initialize gamma and beta
+    self.gamma = nn.Parameter(torch.Tensor(np.ones(n_neurons)))
+    self.beta = nn.Parameter(torch.Tensor(np.zeros(n_neurons)))
+
+    self.fct = CustomBatchNormManualFunction()
     ########################
     # END OF YOUR CODE    #
     #######################
@@ -203,8 +271,9 @@ class CustomBatchNormManualModule(nn.Module):
     ########################
     # PUT YOUR CODE HERE  #
     #######################
-    raise NotImplementedError
-    ########################
+
+    out = self.fct.apply(input, self.gamma, self.beta, self.epsilon)
+
     # END OF YOUR CODE    #
     #######################
 

@@ -28,11 +28,11 @@ class LinearModule(object):
     #######################
     mean = 0
     std_dev = 0.0001
-    print(in_features)
-    print(out_features)
+    #print(in_features)
+    #print(out_features)
     # create weight matrices
     weight = np.random.normal(mean, std_dev, (out_features, in_features))
-    print(weight.shape)
+    #print(weight.shape)
     grad_weight = np.zeros((in_features, out_features))
 
     # create biases (in batches)
@@ -95,24 +95,12 @@ class LinearModule(object):
     #######################
     # get dx
     dx = np.matmul(dout, self.params['weight'])
-    #print('dout')
-    #print(dout.shape)
-
-    #print('dx')
-    #print(dx.shape) # check!
-
-    #print('weights')
-    #print(self.params['weight'].shape)
 
     # get db
     self.grads['bias'] = np.mean(np.matmul(dout, np.identity(len(self.params['bias']))),0)
-    #print('bias')
-    #print(self.grads['bias'].shape)
 
     # get dW
     self.grads['weight'] = np.matmul(dout.T, self.input)
-    #print('gradients')
-    #print(self.grads['weight'].shape)
 
     ########################
     # END OF YOUR CODE    #
@@ -171,7 +159,7 @@ class ReLUModule(object):
 
     # 1 if > 0 and 0 if < 0
 
-    print(dout.shape)
+    #print(dout.shape)
     #d = np.ones_like(dout)
     ddout = np.zeros_like(self.value)
 
@@ -183,7 +171,7 @@ class ReLUModule(object):
     ########################
     # END OF YOUR CODE    #
     #######################    
-    print(dx.shape)
+    #print(dx.shape)
     return dx
 
 class SoftMaxModule(object):
@@ -246,11 +234,11 @@ class SoftMaxModule(object):
     #SM = self.value.reshape((-1, 1))
     #print(SM.shape)
     # softmax output: self.value
-    print(self.value.shape)
+    #print(self.value.shape)
     # first create -SS matrix
     #soft = np.expand_dims(self.value, 1)
     soft = self.value
-    print(soft.shape)
+    #print(soft.shape)
 
     ss1 = np.einsum('ij,ik->ijk', -soft, soft)
 
@@ -292,7 +280,7 @@ class CrossEntropyModule(object):
     #######################
     # PUT YOUR CODE HERE  #
     #######################
-
+    print(x.shape)
     out = -np.log(x[np.arange(x.shape[0]), y.argmax(1)]).mean()
 
     ########################

@@ -12,6 +12,12 @@ import os
 from convnet_pytorch import ConvNet
 import cifar10_utils
 
+import pickle
+import torch
+from torch import nn
+from torch import functional as F
+from torch.autograd import Variable
+
 # Default constants
 LEARNING_RATE_DEFAULT = 1e-4
 BATCH_SIZE_DEFAULT = 32
@@ -45,7 +51,17 @@ def accuracy(predictions, targets):
   ########################
   # PUT YOUR CODE HERE  #
   #######################
-  raise NotImplementedError
+  # use predictions and targets to
+  pred = np.argmax(predictions, axis=1)
+
+  lab = np.argmax(targets, axis=1)
+
+  count = 0
+  for i in range(len(pred)):
+    if pred[i] == lab[i]:
+      count += 1
+
+  accuracy = count / len(pred)
   ########################
   # END OF YOUR CODE    #
   #######################
@@ -67,7 +83,69 @@ def train():
   ########################
   # PUT YOUR CODE HERE  #
   #######################
-  raise NotImplementedError
+  # loop through data
+  cifar10 = cifar10_utils.get_cifar10('cifar10/cifar-10-batches-py')
+  x, y = cifar10['train'].next_batch(FLAGS.batch_size)
+  print(y.shape)
+  print(x.shape)
+
+  # get channels
+  n_channels = np.size(x, 1)
+
+  # create model
+  net = ConvNet(n_channels, 10)
+
+  # get loss function and optimizer
+  crossEntropy = nn.CrossEntropyLoss()
+
+  loss_list = []
+  accuracy_list = []
+
+  optimizer = torch.optim.Adam(net.parameters(), lr=FLAGS.learning_rate)
+
+  for i in range(FLAGS.max_steps):
+
+    x = Variable(torch.from_numpy(x), requires_grad=True)
+
+    out = net(x)
+    out_numpy = out.data[:].numpy()
+
+    # apply cross entropy
+    label_index = np.argmax(y, axis=1)
+    label_index = torch.LongTensor(label_index)
+
+    loss = crossEntropy(out, label_index)
+
+    if i % FLAGS.eval_freq == 0:
+      print(accuracy(out_numpy, y))
+      print(loss)
+      pickle.dump(loss_list, open("losses.p", "wb"))
+      pickle.dump(accuracy_list, open("accuracies.p", "wb"))
+
+
+    loss_list.append(loss)
+    accuracy_list.append(accuracy(out_numpy, y))
+
+    # Backward and optimize
+    optimizer.zero_grad()
+    loss.backward()
+    optimizer.step()
+
+    # insert data
+    x, y = cifar10['train'].next_batch(FLAGS.batch_size)
+
+  # test
+  x, y = cifar10['test'].images, cifar10['test'].labels
+
+  x = Variable(torch.from_numpy(x), requires_grad=False)
+  out = net(x)
+  out_numpy = out.data[:].numpy()
+  print("The accuracy on the test set is:")
+  print(accuracy(out_numpy, y))
+
+  # save model
+  torch.save(net, 'ConvNet.pt')
+
   ########################
   # END OF YOUR CODE    #
   #######################

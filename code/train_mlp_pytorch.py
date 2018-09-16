@@ -11,12 +11,16 @@ import numpy as np
 import os
 from mlp_pytorch import MLP
 import cifar10_utils
+import torch
+from torch import nn
+from torch import functional as F
+from torch.autograd import Variable
 
 # Default constants
-DNN_HIDDEN_UNITS_DEFAULT = '100'
-LEARNING_RATE_DEFAULT = 2e-3
-MAX_STEPS_DEFAULT = 1500
-BATCH_SIZE_DEFAULT = 200
+DNN_HIDDEN_UNITS_DEFAULT = '100,50,25'
+LEARNING_RATE_DEFAULT = 5e-3
+MAX_STEPS_DEFAULT = 3000
+BATCH_SIZE_DEFAULT = 100
 EVAL_FREQ_DEFAULT = 100
 
 # Directory in which cifar data is saved
@@ -45,7 +49,19 @@ def accuracy(predictions, targets):
   ########################
   # PUT YOUR CODE HERE  #
   #######################
-  raise NotImplementedError
+
+  # use predictions and targets to
+  pred = np.argmax(predictions, axis=1)
+
+  lab = np.argmax(targets, axis=1)
+
+  count = 0
+  for i in range(len(pred)):
+    if pred[i] == lab[i]:
+      count += 1
+
+  accuracy = count / len(pred)
+
   ########################
   # END OF YOUR CODE    #
   #######################
@@ -63,6 +79,7 @@ def train():
   ### DO NOT CHANGE SEEDS!
   # Set the random seeds for reproducibility
   np.random.seed(42)
+  torch.manual_seed(42)
 
   ## Prepare all functions
   # Get number of units in each hidden layer specified in the string such as 100,100
@@ -75,7 +92,62 @@ def train():
   ########################
   # PUT YOUR CODE HERE  #
   #######################
-  raise NotImplementedError
+
+  # loop through data
+  cifar10 = cifar10_utils.get_cifar10('cifar10/cifar-10-batches-py')
+  x, y = cifar10['train'].next_batch(BATCH_SIZE_DEFAULT)
+  print(y.shape)
+  print(x.shape)
+  x = x.reshape(np.size(x,0), -1)
+
+  n_input = np.size(x, 1)
+
+  # create model
+  net = MLP(n_input, dnn_hidden_units, 10)
+
+  # get loss function and optimizer
+  crossEntropy = nn.CrossEntropyLoss()
+
+  optimizer = torch.optim.SGD(net.parameters(), lr=FLAGS.learning_rate)
+
+  for i in range(FLAGS.max_steps):
+
+    x = Variable(torch.from_numpy(x), requires_grad = True)
+
+    out = net(x)
+    out_numpy = out.data[:].numpy()
+
+    # apply cross entropy
+    label_index = np.argmax(y, axis=1)
+    label_index = torch.LongTensor(label_index)
+
+    loss = crossEntropy(out, label_index)
+
+    if i % FLAGS.eval_freq == 0:
+      print(accuracy(out_numpy, y))
+      print(loss)
+
+    # Backward and optimize
+    optimizer.zero_grad()
+    loss.backward()
+    optimizer.step()
+
+    # insert data
+    x, y = cifar10['train'].next_batch(FLAGS.batch_size)
+    x = x.reshape(np.size(x, 0), -1)
+
+
+
+  # test
+  x, y = cifar10['test'].images, cifar10['test'].labels
+  x = x.reshape(np.size(x, 0), -1)
+
+  x = Variable(torch.from_numpy(x), requires_grad = False)
+  out = net(x)
+  out_numpy = out.data[:].numpy()
+  print("The accuracy on the test set is:")
+  print(accuracy(out_numpy,y))
+
   ########################
   # END OF YOUR CODE    #
   #######################

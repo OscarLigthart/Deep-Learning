@@ -48,11 +48,12 @@ def accuracy(predictions, targets):
   #######################
 
   # use predictions and targets to
-  pred = np.amax(predictions, axis=1)
+  pred = np.argmax(predictions, axis=1)
 
-  lab = np.amax(predictions, axis=1)
+  lab = np.argmax(targets, axis=1)
+
   count = 0
-  for i in range(pred):
+  for i in range(len(pred)):
     if pred[i] == lab[i]:
       count += 1
 
@@ -89,15 +90,58 @@ def train():
   # PUT YOUR CODE HERE  #
   #######################
 
+  crossEntropy = CrossEntropyModule()
+
   # loop through data
-  X,Y = load_cifar10_batch(DATA_DIR_DEFAULT)
+  cifar10 = cifar10_utils.get_cifar10('cifar10/cifar-10-batches-py')
+  x, y = cifar10['train'].next_batch(BATCH_SIZE_DEFAULT)
+  print(y.shape)
+  print(x.shape)
+  x = x.reshape(np.size(x,0), -1)
+
+  n_input = np.size(x, 1)
+
 
   # create model
-  net = MLP()
+  net = MLP(n_input, dnn_hidden_units, 10)
 
-  # insert data
+  for i in range(FLAGS.max_steps):
 
-  # update weights
+    out = net.forward(x)
+
+    # apply cross entropy
+    loss = crossEntropy.forward(out, y)
+
+    if i % FLAGS.eval_freq == 0:
+      print(accuracy(out, y))
+      print(loss)
+
+    # get gradients of Cross Entropy
+    dout = crossEntropy.backward(out, y)
+
+    net.backward(dout)
+
+    # now upgrade weights
+    for layer in net.layers:
+      layer.params['weight'] = layer.params['weight'] - FLAGS.learning_rate * layer.grads['weight']
+      layer.params['bias'] = layer.params['bias'] - FLAGS.learning_rate * layer.grads['bias']
+
+    net.lastlayer.params['weight'] = net.lastlayer.params['weight'] - FLAGS.learning_rate * net.lastlayer.grads['weight']
+    net.lastlayer.params['bias'] = net.lastlayer.params['bias'] - FLAGS.learning_rate * net.lastlayer.grads['bias']
+
+    # insert data
+    x, y = cifar10['train'].next_batch(FLAGS.batch_size)
+    x = x.reshape(np.size(x, 0), -1)
+
+
+
+  # test
+  x, y = cifar10['test'].images, cifar10['test'].labels
+  x = x.reshape(np.size(x, 0), -1)
+  out = net.forward(x)
+  print("The accuracy on the test set is:")
+  print(accuracy(out,y))
+
 
   ########################
   # END OF YOUR CODE    #
