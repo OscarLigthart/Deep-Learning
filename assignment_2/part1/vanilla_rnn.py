@@ -21,6 +21,8 @@ from __future__ import print_function
 import torch
 import torch.nn as nn
 
+import numpy as np
+
 ################################################################################
 
 class VanillaRNN(nn.Module):
@@ -29,6 +31,45 @@ class VanillaRNN(nn.Module):
         super(VanillaRNN, self).__init__()
         # Initialization here ...
 
+        # input_dim = batch_size x 1
+        # num_hidden = 128
+        # num_classes = 10
+        # batch_size = 128
+
+        mean = 0
+        std_dev = 0.001
+
+        self.num_hidden = num_hidden
+        self.batch_size = batch_size
+        self.seq_length = seq_length
+
+        self.W_hx = torch.nn.Parameter(torch.Tensor(np.random.normal(mean, std_dev, (num_hidden, input_dim)))).to(device)
+
+        self.W_hh = torch.nn.Parameter(torch.Tensor(np.random.normal(mean, std_dev, (num_hidden, num_hidden)))).to(device)
+
+        self.W_ph = torch.nn.Parameter(torch.Tensor(np.random.normal(mean, std_dev, (num_classes, num_hidden)))).to(device)
+
+        self.bias_h = torch.nn.Parameter(torch.Tensor(np.zeros(batch_size))).to(device)
+
+        self.bias_p = torch.nn.Parameter(torch.Tensor(np.zeros(batch_size))).to(device)
+
+        self.tanh = torch.nn.Tanh()
+
+
+
     def forward(self, x):
         # Implementation here ...
-        pass
+
+
+        h = torch.Tensor(np.zeros((self.num_hidden, self.batch_size)))
+
+        for i in range(self.seq_length):
+
+            h = self.tanh(torch.mm(self.W_hx, x[:,i].view(1,-1)) + torch.mm(self.W_hh, h) + self.bias_h)
+
+
+        p = torch.mm(self.W_ph, h) + self.bias_p
+
+        p = torch.t(p)
+
+        return p
