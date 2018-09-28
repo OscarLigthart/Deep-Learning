@@ -1,5 +1,5 @@
 #!/bin/sh
-#PBS -lwalltime=00:05:00
+#PBS -lwalltime=03:00:00
 #PBS -lnodes=1:ppn=12
 #PBS -lmem=250GB
 module load eb

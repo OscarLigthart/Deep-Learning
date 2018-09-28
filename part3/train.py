@@ -66,7 +66,6 @@ def train(config):
     # Initialize the model that we are going to use
     model = TextGenerationModel(config.batch_size, config.seq_length, vocab_size, config.lstm_num_hidden, config.lstm_num_layers, config.device)
     model.to(device)
-    #model = torch.nn.DataParallel(model)
 
     # Setup the loss and optimizer
     criterion = torch.nn.CrossEntropyLoss()
@@ -90,13 +89,12 @@ def train(config):
         # load model
         model = torch.load('TrainIntervalModel.pt')
         model.to(device)
-        #model = torch.nn.DataParallel(model)
 
         # load previous learning rate
         learning_rate = pickle.load(open("lr.p", "rb"))
 
         # initialize optimizer with
-        optimizer = torch.optim.RMSprop(model.parameters(), lr=learning_rate)
+        optimizer = torch.optim.Adam(model.parameters(), lr=learning_rate)
 
     else:
         print('No pre-trained model available...')
@@ -112,10 +110,10 @@ def train(config):
         all_steps = 0
 
         # initialize optimizer with starting learning rate
-        optimizer = torch.optim.RMSprop(model.parameters(), lr=config.learning_rate)
+        optimizer = torch.optim.Adam(model.parameters(), lr=config.learning_rate)
 
     # initialize optimizer with previous learning rate. (extract from pickle then use scheduler)
-    #scheduler = torch.optim.lr_scheduler.StepLR(optimizer, step_size=config.learning_rate_step, gamma=config.learning_rate_decay)
+    scheduler = torch.optim.lr_scheduler.StepLR(optimizer, step_size=config.learning_rate_step, gamma=config.learning_rate_decay)
 
     # since the nested for loop stops looping after a complete iteration through the data_loader, add for loop for epochs
     for epoch in range(config.epochs):
@@ -125,13 +123,14 @@ def train(config):
             t1 = time.time()
 
             # apply scheduler
-            #scheduler.step()
+            scheduler.step()
 
-            #if batch_inputs.shape[0] < config.batch_size:
-            #    continue
+            # check if loaded data is of batch_size (input is not of that size at the end of the .txt file)
+            if batch_inputs[0].shape[0] < config.batch_size:
+                continue
 
             # create 2D tensor instead of list of 1D tensors
-            #batch_inputs = torch.stack(batch_inputs)
+            batch_inputs = torch.stack(batch_inputs)
             batch_inputs = batch_inputs.to(device)
 
             out = model(batch_inputs)
@@ -139,6 +138,7 @@ def train(config):
             # transpose to match cross entropy input dimensions
             out.transpose_(1, 2)
 
+            batch_targets = torch.stack(batch_targets)
             batch_targets = batch_targets.to(device)
 
 
@@ -176,16 +176,13 @@ def train(config):
 
                 model.eval()
 
-                random_input = torch.randint(0, vocab_size, (config.batch_size,), dtype=torch.long).view(-1,1)
-                random_input = random_input.to(device)
+                random_input = torch.randint(0, vocab_size, (config.batch_size,)).view(1,-1)
 
-                # get randomly generated sentence
                 sentences = model(random_input)
 
                 # pick a random sentence (from the batch)
                 index = np.random.randint(0, config.batch_size, 1)
-                sentence = sentences[index, :, :]
-
+                sentence = sentences[:,index,:]
 
                 # get predictions
                 sentence = torch.argmax(sentence, dim=2)
@@ -193,7 +190,7 @@ def train(config):
                 # squeeze sentence into 1D
                 sentence = sentence.view(-1).cpu()
 
-                sentence = torch.cat((random_input[index][0].cpu().long(), sentence), dim=0)
+                sentence = torch.cat((random_input[0][index].long(), sentence), dim=0)
 
                 # print sentence
                 print(dataset.convert_to_string(sentence.data.numpy()))
@@ -223,7 +220,7 @@ def train(config):
                 # https://github.com/pytorch/pytorch/pull/9655
                 break
 
-            # counter of total amounts of steps (keep track over multiple training sessions)
+            # counter of total amounts of steps (keep track over multiple trainingsessions)
             all_steps += 1
 
         # pickle sentences and steps
@@ -273,13 +270,13 @@ if __name__ == "__main__":
 
     # Misc params
     parser.add_argument('--summary_path', type=str, default="./summaries/", help='Output path for summaries')
-    parser.add_argument('--print_every', type=int, default=10, help='How often to print training progress')
+    parser.add_argument('--print_every', type=int, default=50, help='How often to print training progress')
     parser.add_argument('--sample_every', type=int, default=1000, help='How often to sample from the model')
 
     parser.add_argument('--device', type=str, default="cuda:0", help="Training device 'cpu' or 'cuda:0'")
 
     # own params
-    parser.add_argument('--epochs', type=int, default=50, help="Amount of epochs to train")
+    parser.add_argument('--epochs', type=int, default=30, help="Amount of epochs to train")
 
     config = parser.parse_args()
 

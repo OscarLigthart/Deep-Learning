@@ -38,11 +38,8 @@ class TextGenerationModel(nn.Module):
 
 
         # linear nodig?
-        self.embed = nn.Embedding(vocabulary_size, vocabulary_size)
-        self.embed.weight.data = torch.eye(vocabulary_size)
-        self.embed.weight.requires_grad = False
 
-        self.lstm = nn.LSTM(vocabulary_size, lstm_num_hidden, lstm_num_layers, batch_first=True)
+        self.lstm = nn.LSTM(1, lstm_num_hidden, lstm_num_layers)
         self.linear = nn.Linear(lstm_num_hidden, vocabulary_size)
 
 
@@ -54,32 +51,29 @@ class TextGenerationModel(nn.Module):
 
         out = torch.FloatTensor().to(self.device)
 
-        # set for loop in train.py
-
         # if input is a whole sentence, use following code (length will thus be longer than 1)
-        if x.shape[1] > 1:
+        if len(x) > 1:
             # run data through LSTM
-
-            x_input = self.embed(x)
+            x_input = x.view(self.seq_length, -1, 1).float().to(self.device)
             out, (h, c) = self.lstm(x_input, (h, c))
             out = self.linear(out)
 
         # load randomly generated letter, to generate sentences based on that letter (length of input will then be 1)
-        elif x.shape[1] == 1:
+        elif len(x) == 1:
 
             # get batch of randomly generated letters
-            x_input = self.embed(x)
+            x_input = x.view(1, -1, 1).float().to(self.device)
 
             # loop through sequence length to set generated output as input for next sequence
             for i in range(self.seq_length):
                 # if input is one letter (to generate a sentence), use following code
                 out_i, (h, c) = self.lstm(x_input, (h, c))
                 out_i = self.linear(out_i)
-                out = torch.cat((out, out_i), 1)
+                out = torch.cat((out, out_i), 0)
 
                 # load new datapoint by taking the predicted previous letter
                 out_i = torch.argmax(out_i, dim=2)
-                x_input = self.embed(out_i)
+                x_input = out_i.view(1, -1, 1).float().to(self.device)
 
         return out
 
