@@ -39,37 +39,37 @@ class LSTM(nn.Module):
 
         # g
         self.W_gx = torch.nn.Parameter(torch.Tensor(np.random.normal(mean, std_dev, (num_hidden, input_dim)))).to(device)
-        self.bias_g = torch.nn.Parameter(torch.Tensor(np.zeros(batch_size))).to(device)
+        self.bias_g = torch.nn.Parameter(torch.Tensor(np.zeros((num_hidden, 1)))).to(device)
 
         # h
         self.W_gh = torch.nn.Parameter(torch.Tensor(np.random.normal(mean, std_dev, (num_hidden, num_hidden)))).to(device)
-        self.bias_h = torch.nn.Parameter(torch.Tensor(np.zeros(batch_size))).to(device)
+        self.bias_h = torch.nn.Parameter(torch.Tensor(np.zeros((num_hidden, 1)))).to(device)
 
 
         # i
         self.W_ix = torch.nn.Parameter(torch.Tensor(np.random.normal(mean, std_dev, (num_hidden, input_dim)))).to(device)
         self.W_ih = torch.nn.Parameter(torch.Tensor(np.random.normal(mean, std_dev, (num_hidden, num_hidden)))).to(
             device)
-        self.bias_i = torch.nn.Parameter(torch.Tensor(np.zeros(batch_size))).to(device)
+        self.bias_i = torch.nn.Parameter(torch.Tensor(np.zeros((num_hidden, 1)))).to(device)
 
         # f
         self.W_fx = torch.nn.Parameter(torch.Tensor(np.random.normal(mean, std_dev, (num_hidden, input_dim)))).to(
             device)
         self.W_fh = torch.nn.Parameter(torch.Tensor(np.random.normal(mean, std_dev, (num_hidden, num_hidden)))).to(
             device)
-        self.bias_f = torch.nn.Parameter(torch.Tensor(np.zeros(batch_size))).to(device)
+        self.bias_f = torch.nn.Parameter(torch.Tensor(np.zeros((num_hidden, 1)))).to(device)
 
         # o
         self.W_ox = torch.nn.Parameter(torch.Tensor(np.random.normal(mean, std_dev, (num_hidden, input_dim)))).to(
             device)
         self.W_oh = torch.nn.Parameter(torch.Tensor(np.random.normal(mean, std_dev, (num_hidden, num_hidden)))).to(
             device)
-        self.bias_o = torch.nn.Parameter(torch.Tensor(np.zeros(batch_size))).to(device)
+        self.bias_o = torch.nn.Parameter(torch.Tensor(np.zeros((num_hidden, 1)))).to(device)
 
         #p
         self.W_ph = torch.nn.Parameter(torch.Tensor(np.random.normal(mean, std_dev, (num_classes, num_hidden)))).to(
             device)
-        self.bias_p = torch.nn.Parameter(torch.Tensor(np.zeros(batch_size))).to(device)
+        self.bias_p = torch.nn.Parameter(torch.Tensor(np.zeros((num_classes, 1)))).to(device)
 
 
         # todo kijk of die functies in 1 kunnen

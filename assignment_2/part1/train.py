@@ -43,8 +43,12 @@ def train(config):
     device = torch.device(config.device)
 
     # Initialize the model that we are going to use
-    #model = VanillaRNN(config.input_length, config.input_dim, config.num_hidden, config.num_classes, config.batch_size, device='cpu')
-    model = LSTM(config.input_length, config.input_dim, config.num_hidden, config.num_classes, config.batch_size, device='cpu')
+    if config.model_type == 'RNN':
+        model = VanillaRNN(config.input_length, config.input_dim, config.num_hidden, config.num_classes, config.batch_size, device='cpu')
+    elif config.model_type == 'LSTM':
+        model = LSTM(config.input_length, config.input_dim, config.num_hidden, config.num_classes, config.batch_size, device='cpu')
+    else:
+        AssertionError('Models available: RNN, LSTM')
 
     # Initialize the dataset and data loader (note the +1)
     dataset = PalindromeDataset(config.input_length+1)
@@ -82,13 +86,15 @@ def train(config):
         targets = batch_targets.data.numpy()
         predictions_np = predictions.data.numpy()
 
+        # get amount of correct predictions
         correct = 0
         for i in range(len(targets)):
             if targets[i] == np.argmax(predictions_np[i]):
                 correct += 1
 
         # get accuracy
-        accuracy = correct / len(targets)  # fixme
+        accuracy = correct / len(targets)
+
 
         # Just for time measurement
         t2 = time.time()

@@ -18,6 +18,7 @@ from __future__ import division
 from __future__ import print_function
 
 import torch.nn as nn
+import torch
 
 
 class TextGenerationModel(nn.Module):
@@ -28,6 +29,55 @@ class TextGenerationModel(nn.Module):
         super(TextGenerationModel, self).__init__()
         # Initialization here...
 
+        #input = vocabulary size?
+        self.seq_length = seq_length
+        self.batch_size = batch_size
+        self.lstm_num_hidden = lstm_num_hidden
+        self.lstm_num_layers = lstm_num_layers
+        self.device = device
+
+
+        # linear nodig?
+        self.embed = nn.Embedding(vocabulary_size, vocabulary_size)
+        self.embed.weight.data = torch.eye(vocabulary_size)
+        self.embed.weight.requires_grad = False
+
+        self.lstm = nn.LSTM(vocabulary_size, lstm_num_hidden, lstm_num_layers)
+        self.linear = nn.Linear(lstm_num_hidden, vocabulary_size)
+
+
     def forward(self, x):
         # Implementation here...
-        pass
+
+        h = torch.zeros(self.lstm_num_layers, self.batch_size, self.lstm_num_hidden).to(self.device)
+        c = torch.zeros(self.lstm_num_layers, self.batch_size, self.lstm_num_hidden).to(self.device)
+
+        out = torch.FloatTensor().to(self.device)
+
+        # if input is a whole sentence, use following code (length will thus be longer than 1)
+        if len(x) > 1:
+            # run data through LSTM
+
+            x_input = self.embed(x)
+            out, (h, c) = self.lstm(x_input, (h, c))
+            out = self.linear(out)
+
+        # load randomly generated letter, to generate sentences based on that letter (length of input will then be 1)
+        elif len(x) == 1:
+
+            # get batch of randomly generated letters
+            x_input = self.embed(x)
+
+            # loop through sequence length to set generated output as input for next sequence
+            for i in range(self.seq_length):
+                # if input is one letter (to generate a sentence), use following code
+                out_i, (h, c) = self.lstm(x_input, (h, c))
+                out_i = self.linear(out_i)
+                out = torch.cat((out, out_i), 0)
+
+                # load new datapoint by taking the predicted previous letter
+                out_i = torch.argmax(out_i, dim=2)
+                x_input = self.embed(out_i)
+
+        return out
+
