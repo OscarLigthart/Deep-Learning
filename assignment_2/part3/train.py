@@ -24,6 +24,8 @@ import argparse
 
 import numpy as np
 
+import torch.nn.functional as F
+
 import torch
 import torch.optim as optim
 from torch.utils.data import DataLoader
@@ -35,21 +37,6 @@ import pickle
 import os
 
 ################################################################################
-
-def accuracies(pred, target):
-
-    pred = torch.argmax(pred, dim =1)
-    n, d = target.shape[0], target.shape[1]
-    # get amount of correct predictions
-    correct = 0
-    for i in range(n):
-        for j in range(d):
-            if target[i,j] == pred[i,j]:
-                correct += 1
-
-    acc = correct/ (n*d)
-
-    return acc
 
 
 
@@ -63,41 +50,38 @@ def train(config):
     data_loader = DataLoader(dataset, config.batch_size, num_workers=1, drop_last=True)
     vocab_size = dataset.vocab_size
 
+
     # Initialize the model that we are going to use
     model = TextGenerationModel(config.batch_size, config.seq_length, vocab_size, config.lstm_num_hidden, config.lstm_num_layers, config.device)
-    model.to(device)
-    #model = torch.nn.DataParallel(model)
+    model = model.to(device)
+
+    print(model)
 
     # Setup the loss and optimizer
     criterion = torch.nn.CrossEntropyLoss()
-    criterion = criterion.to(device)
 
-
-    # if pickle file is available, load steps and use index -1 to get last step + get lists of values
+    # if pickle file is available, load steps and use index -1 to get last step + get lists of values, to continue training
+    # where we left off
     if os.path.isfile("steps.p"):
         print('Pre-trained model available...')
         print('Resuming training...')
+
         # load lists
         step_intervals = pickle.load(open("steps.p", "rb"))
         all_sentences = pickle.load(open("sentences.p", "rb"))
         accuracy_list = pickle.load(open("accuracies.p", "rb"))
         loss_list = pickle.load(open("loss.p", "rb"))
+        model_info = pickle.load(open("model_info.p", "rb"))
 
         # start where we left off
         all_steps = step_intervals[-1]
 
-
         # load model
-        model = torch.load('TrainIntervalModel.pt')
-        model.to(device)
-        #model = torch.nn.DataParallel(model)
+        Modelname = 'TrainIntervalModel' + model_info[0] + 'acc:' + model_info[1] + '.pt'
+        model = torch.load(Modelname)
+        model = model.to(device)
 
-        # load previous learning rate
-        learning_rate = pickle.load(open("lr.p", "rb"))
-
-        # initialize optimizer with
-        optimizer = torch.optim.RMSprop(model.parameters(), lr=learning_rate)
-
+    # otherwise start training from a clean slate
     else:
         print('No pre-trained model available...')
         print('Initializing training...')
@@ -115,40 +99,40 @@ def train(config):
         optimizer = torch.optim.RMSprop(model.parameters(), lr=config.learning_rate)
 
     # initialize optimizer with previous learning rate. (extract from pickle then use scheduler)
-    #scheduler = torch.optim.lr_scheduler.StepLR(optimizer, step_size=config.learning_rate_step, gamma=config.learning_rate_decay)
+    scheduler = torch.optim.lr_scheduler.StepLR(optimizer, step_size=config.learning_rate_step, gamma=config.learning_rate_decay)
 
     # since the nested for loop stops looping after a complete iteration through the data_loader, add for loop for epochs
     for epoch in range(config.epochs):
+        print(model)
         for step, (batch_inputs, batch_targets) in enumerate(data_loader):
 
             # Only for time measurement of step through network
             t1 = time.time()
 
             # apply scheduler
-            #scheduler.step()
-
-            #if batch_inputs.shape[0] < config.batch_size:
-            #    continue
+            scheduler.step()
 
             # create 2D tensor instead of list of 1D tensors
             #batch_inputs = torch.stack(batch_inputs)
             batch_inputs = batch_inputs.to(device)
 
-            out = model(batch_inputs)
+            h,c = model.init_hidden()
+            out, (h,c) = model(batch_inputs, h, c)
 
             # transpose to match cross entropy input dimensions
             out.transpose_(1, 2)
 
             batch_targets = batch_targets.to(device)
 
-
             #######################################################
             # Add more code here ...
             #######################################################
 
             loss = criterion(out, batch_targets)
-            accuracy = accuracies(out, batch_targets)
-
+            
+            max = torch.argmax(out, dim=1)
+            correct = (max == batch_targets)
+            accuracy = torch.sum(correct).item()/correct.size()[0]/correct.size()[1]
 
             # Backward and optimize
             optimizer.zero_grad()
@@ -174,48 +158,77 @@ def train(config):
                 # Generate generated sequence #
                 ###############################
 
-                model.eval()
+                # do not keep track of gradients during model evaluation
+                with torch.no_grad():
 
-                random_input = torch.randint(0, vocab_size, (config.batch_size,), dtype=torch.long).view(-1,1)
-                random_input = random_input.to(device)
+                    # create random character to start sentence with
+                    random_input = torch.randint(0, vocab_size, (config.batch_size,), dtype=torch.long).view(-1,1)
+                    x_input = random_input.to(device)
 
-                # get randomly generated sentence
-                sentences = model(random_input)
+                    # initialize hidden state and cell state
+                    h,c = model.init_hidden()
+                    h = h.to(device)
+                    c = c.to(device)
 
-                # pick a random sentence (from the batch)
-                index = np.random.randint(0, config.batch_size, 1)
-                sentence = sentences[index, :, :]
+                    sentences = x_input
+
+                    # loop through sequence length to set generated output as input for next sequence
+                    for i in range(config.seq_length):
+
+                        # get randomly generated sentence
+                        out, (h,c) = model(x_input, h, c)
+
+                        ####################
+                        # Temperature here #
+                        ####################
+
+                        # check whether user wants to apply temperature sampling
+                        if config.temperature:
+
+                            # apply temperature sampling
+                            out = out / config.tempvalue
+                            out = F.softmax(out, dim=2)
+
+                            # create a torch distribution of the calculated softmax probabilities and sample from that distribution
+                            distribution = torch.distributions.categorical.Categorical(out.view(config.batch_size, vocab_size))
+                            out = distribution.sample().view(-1, 1)
+
+                        # check whether user wants to apply greedy sampling
+                        else:
+                            # load new datapoint by taking the predicted previous letter using greedy approach
+                            out = torch.argmax(out, dim=2)
+
+                        # append generated character to total sentence
+                        sentences = torch.cat((sentences, out), 1)
+                        x_input = out
 
 
-                # get predictions
-                sentence = torch.argmax(sentence, dim=2)
+                    # pick a random sentence (from the batch of created sentences)
+                    index = np.random.randint(0, config.batch_size, 1)
+                    sentence = sentences[index, :]
 
-                # squeeze sentence into 1D
-                sentence = sentence.view(-1).cpu()
+                    # squeeze sentence into 1D
+                    sentence = sentence.view(-1).cpu()
 
-                sentence = torch.cat((random_input[index][0].cpu().long(), sentence), dim=0)
+                    # print sentence
+                    print(dataset.convert_to_string(sentence.data.numpy()))
 
-                # print sentence
-                print(dataset.convert_to_string(sentence.data.numpy()))
+                    # save sentence
+                    all_sentences.append(sentence.data.numpy())
 
-                # save sentence
-                all_sentences.append(sentence.data.numpy())
+                    ##########################
+                    # Save loss and accuracy #
+                    ##########################
 
-                model.train()
+                    # save loss value
+                    loss = loss.cpu()
+                    loss_list.append(loss.data.numpy())
 
-                ##########################
-                # Save loss and accuracy #
-                ##########################
+                    # save accuracy value
+                    accuracy_list.append(accuracy)
 
-                # save loss value
-                loss = loss.cpu()
-                loss_list.append(loss.data.numpy())
-
-                # save accuracy value
-                accuracy_list.append(accuracy)
-
-                # save step interval
-                step_intervals.append(all_steps)
+                    # save step interval
+                    step_intervals.append(all_steps)
 
 
             if step == config.train_steps:
@@ -226,20 +239,24 @@ def train(config):
             # counter of total amounts of steps (keep track over multiple training sessions)
             all_steps += 1
 
-        # pickle sentences and steps
-        pickle.dump(all_sentences, open('sentences.p', 'wb'))
-        pickle.dump(step_intervals, open('steps.p', 'wb'))
+        if config.savefiles:
+            # pickle sentences and steps
+            pickle.dump(all_sentences, open('sentences.p', 'wb'))
+            pickle.dump(step_intervals, open('steps.p', 'wb'))
 
-        # pickle accuracy and loss
-        pickle.dump(accuracy_list, open('accuracies.p', 'wb'))
-        pickle.dump(loss_list, open('loss.p', 'wb'))
+            # pickle accuracy and loss
+            pickle.dump(accuracy_list, open('accuracies.p', 'wb'))
+            pickle.dump(loss_list, open('loss.p', 'wb'))
 
-        # save model
-        Modelname = 'TrainIntervalModel' + str(epoch) + 'acc:' + str(accuracy) + '.pt'
-        torch.save(model, Modelname)
 
-        # save learning rate
-        pickle.dump(optimizer.param_groups[0]['lr'], open('lr.p', 'wb'))
+
+            # save model
+
+            Modelname = 'TrainIntervalModel' + str(epoch) + 'acc:' + str(accuracy) + '.pt'
+            torch.save(model, Modelname)
+
+            model_info = [str(epoch), str(accuracy)]
+            pickle.dump(model_info, open('model_info.p', 'wb'))
 
     print('Done training.')
 
@@ -254,8 +271,7 @@ if __name__ == "__main__":
 
     # Model params
     parser.add_argument('--txt_file', type=str, default='assets/book_EN_grimms_fairy_tails.txt', help="Path to a .txt file to train on")
-    #parser.add_argument('--txt_file', type=str, default='assets/book_NL_darwin_reis_om_de_wereld.txt', help="Path to a .txt file to train on")
-    parser.add_argument('--seq_length', type=int, default=30, help='Length of an input sequence')
+    parser.add_argument('--seq_length', type=int, default=50, help='Length of an input sequence')
     parser.add_argument('--lstm_num_hidden', type=int, default=128, help='Number of hidden units in the LSTM')
     parser.add_argument('--lstm_num_layers', type=int, default=2, help='Number of LSTM layers in the model')
 
@@ -273,13 +289,16 @@ if __name__ == "__main__":
 
     # Misc params
     parser.add_argument('--summary_path', type=str, default="./summaries/", help='Output path for summaries')
-    parser.add_argument('--print_every', type=int, default=10, help='How often to print training progress')
-    parser.add_argument('--sample_every', type=int, default=1000, help='How often to sample from the model')
+    parser.add_argument('--print_every', type=int, default=50, help='How often to print training progress')
+    parser.add_argument('--sample_every', type=int, default=100, help='How often to sample from the model')
 
-    parser.add_argument('--device', type=str, default="cuda:0", help="Training device 'cpu' or 'cuda:0'")
+    parser.add_argument('--device', type=str, default="cpu", help="Training device 'cpu' or 'cuda:0'")
 
     # own params
     parser.add_argument('--epochs', type=int, default=50, help="Amount of epochs to train")
+    parser.add_argument('--temperature', type=bool, default=False, help="Choose whether temperature sampling should be applied")
+    parser.add_argument('--tempvalue', type=float, default=1, help="Choose temperature value")
+    parser.add_argument('--savefiles', type=bool, default=False, help="Choose whether to save variables and model")
 
     config = parser.parse_args()
 

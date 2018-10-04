@@ -72,7 +72,7 @@ class LSTM(nn.Module):
         self.bias_p = torch.nn.Parameter(torch.Tensor(np.zeros((num_classes, 1)))).to(device)
 
 
-        # todo kijk of die functies in 1 kunnen
+        # activation functions
         self.tanh = torch.nn.Tanh()
         self.sigmoid = torch.nn.Sigmoid()
         self.sigmoid2 = torch.nn.Sigmoid()
@@ -86,6 +86,7 @@ class LSTM(nn.Module):
         h = torch.Tensor(np.zeros((self.num_hidden, self.batch_size)))
         c = torch.Tensor(np.zeros((self.num_hidden, self.batch_size)))
 
+        # for every item in sequence length, apply the given formulas
         for j in range(self.seq_length):
 
             g = self.tanh(torch.mm(self.W_gx, x[:, j].view(1, -1)) + torch.mm(self.W_gh, h) + self.bias_g)
@@ -100,6 +101,7 @@ class LSTM(nn.Module):
 
             h = self.tanh2(c) * o
 
+        # get the prediction for only the final item
         p = torch.mm(self.W_ph, h) + self.bias_p
 
         p = torch.t(p)

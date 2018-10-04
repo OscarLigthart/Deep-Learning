@@ -11,5 +11,5 @@ module load modcom
 
 export LD_LIBRARY_PATH=/hpc/eb/Debian9/cuDNN/7.0.5-CUDA-9.0.176/lib64:/hpc/eb/Debian9/CUDA/9.0.176/lib64:$LD_LIBRARY_PATH
 cd Assignment2/part3
-python train.py
+python train.py --device cuda:0
 

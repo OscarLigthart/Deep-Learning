@@ -30,6 +30,8 @@ from dataset import PalindromeDataset
 from vanilla_rnn import VanillaRNN
 from lstm import LSTM
 
+import pickle
+
 # You may want to look into tensorboardX for logging
 # from tensorboardX import SummaryWriter
 
@@ -44,9 +46,9 @@ def train(config):
 
     # Initialize the model that we are going to use
     if config.model_type == 'RNN':
-        model = VanillaRNN(config.input_length, config.input_dim, config.num_hidden, config.num_classes, config.batch_size, device='cpu')
+        model = VanillaRNN(config.input_length, config.input_dim, config.num_hidden, config.num_classes, config.batch_size, config.device)
     elif config.model_type == 'LSTM':
-        model = LSTM(config.input_length, config.input_dim, config.num_hidden, config.num_classes, config.batch_size, device='cpu')
+        model = LSTM(config.input_length, config.input_dim, config.num_hidden, config.num_classes, config.batch_size, config.device)
     else:
         AssertionError('Models available: RNN, LSTM')
 
@@ -54,34 +56,40 @@ def train(config):
     dataset = PalindromeDataset(config.input_length+1)
     data_loader = DataLoader(dataset, config.batch_size, num_workers=1)
 
-
     # Setup the loss and optimizer
     criterion = torch.nn.CrossEntropyLoss()
-    optimizer = torch.optim.RMSprop(model.parameters(), config.learning_rate)
+    optimizer = torch.optim.Adam(model.parameters(), config.learning_rate)
 
+    # keep track of variables
+    accuracy_list = []
+    loss_list = []
+
+    # loop through data (get batches)
     for step, (batch_inputs, batch_targets) in enumerate(data_loader):
 
         # Only for time measurement of step through network
         t1 = time.time()
 
-        # get model predictions
+        # get model predictions (USE THE PLAIN INTEGERS FROM THE PALINDROME TO INSERT INTO THE MODEL AS INPUT)
         predictions = model(batch_inputs)
 
         ############################################################################
         # QUESTION: what happens here and why?
+        #
+        # it clips the gradient to a border value, to prevent exploding or vanishing
+        # gradients.
+        #
         ############################################################################
         torch.nn.utils.clip_grad_norm(model.parameters(), max_norm=config.max_norm)
         ############################################################################
 
-
-        # Add more code here ...
+        # calculate loss
         loss = criterion(predictions, batch_targets)
 
         # Backward and optimize
         optimizer.zero_grad()
         loss.backward()
         optimizer.step()
-
 
         targets = batch_targets.data.numpy()
         predictions_np = predictions.data.numpy()
@@ -94,7 +102,6 @@ def train(config):
 
         # get accuracy
         accuracy = correct / len(targets)
-
 
         # Just for time measurement
         t2 = time.time()
@@ -109,10 +116,21 @@ def train(config):
                     accuracy, loss
             ))
 
+            # keep track of losses
+            loss_list.append(loss.data.numpy())
+
+            # keep track of accuracies
+            accuracy_list.append(accuracy)
+
         if step == config.train_steps:
             # If you receive a PyTorch data-loader error, check this bug report:
             # https://github.com/pytorch/pytorch/pull/9655
             break
+
+    # save variables
+    data = [loss_list, accuracy_list]
+    filename = 'Result_' + config.model_type + '_inputlen_' + str(config.input_length) + '.p'
+    pickle.dump(data, open(filename, 'wb'))
 
     print('Done training.')
 
@@ -135,9 +153,8 @@ if __name__ == "__main__":
     parser.add_argument('--learning_rate', type=float, default=0.001, help='Learning rate')
     parser.add_argument('--train_steps', type=int, default=10000, help='Number of training steps')
     parser.add_argument('--max_norm', type=float, default=10.0)
-    parser.add_argument('--device', type=str, default="cuda:0", help="Training device 'cpu' or 'cuda:0'")
+    parser.add_argument('--device', type=str, default="cpu", help="Training device 'cpu' or 'cuda:0'")
 
     config = parser.parse_args()
 
-    # Train the model
     train(config)

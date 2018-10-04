@@ -51,7 +51,6 @@ class VanillaRNN(nn.Module):
 
         self.bias_h = torch.nn.Parameter(torch.Tensor(np.zeros((num_hidden, 1)))).to(device)
 
-        # self.bias_p = torch.nn.Parameter(torch.Tensor(np.zeros(batch_size))).to(device)
         self.bias_p = torch.nn.Parameter(torch.Tensor(np.zeros((num_classes, 1)))).to(device)
 
         self.tanh = torch.nn.Tanh()
