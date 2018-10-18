@@ -6,6 +6,7 @@ import matplotlib.pyplot as plt
 import torch.nn.functional as F
 from torchvision.utils import make_grid
 import numpy as np
+from scipy.stats import norm
 
 from datasets.bmnist import bmnist
 
@@ -77,15 +78,15 @@ class VAE(nn.Module):
         # reparametrize
         std = torch.exp(0.5 * logvar)
         eps = torch.randn_like(std)
-        #z = eps.mul(std).add_(mean)
-
         z = mean + eps.mul(std)
 
         # decode
         recon = self.decoder(z)
 
+        # calculate reconstruction loss
         recon_loss = F.binary_cross_entropy(recon, input.view(-1, 784), reduction='sum')
 
+        # calculte regularization loss
         reg_loss = -0.5 * torch.sum(1 + logvar - mean.pow(2) - logvar.exp())
 
         average_negative_elbo = recon_loss + reg_loss
@@ -118,20 +119,23 @@ def epoch_iter(model, data, optimizer):
 
     Returns the average elbo for the complete epoch.
     """
-    average_epoch_elbo = None
 
     total_loss = 0
     for i, batch in enumerate(data):
 
+        # run batch through model
         optimizer.zero_grad()
         loss = model(batch)
 
+        # backpropagate through model if training
         if model.training:
             loss.backward()
             optimizer.step()
 
+        # normalize loss
         total_loss += loss.item() / len(batch)
 
+    # get average elbo per epoch
     average_epoch_elbo = total_loss / len(data)
 
     return average_epoch_elbo
@@ -181,27 +185,59 @@ def main():
         #  Add functionality to plot samples from model during training.
         #  You can use the make_grid functionality that is already imported.
         # --------------------------------------------------------------------
-        if epoch % 20 == 0:
-            plt.figure()
+        if epoch % int(ARGS.epochs/2) == 0 or epoch == (ARGS.epochs - 1):
             sampled_ims, im_means = model.sample(sample_size)
-            print('Making grid')
+
+            # plot means
+            plt.figure()
             grid = make_grid(im_means.view(-1,1,28,28), nrow=5)
-
             npimg = grid.detach().numpy()
-
             plt.imshow(np.transpose(npimg, (1, 2, 0)))
-            plt.show()
+            titlename = 'Generated VAE images at epoch ' + str(epoch) + ' using the means'
+            plt.title(titlename)
+
+            # plot sampled images
+            plt.figure()
+            grid = make_grid(sampled_ims.view(-1, 1, 28, 28), nrow=5)
+            npimg = grid.detach().numpy()
+            plt.imshow(np.transpose(npimg, (1, 2, 0)))
+            titlename = 'Generated VAE images at epoch ' + str(epoch) + ' using sampled images'
+            plt.title(titlename)
+
+
     # --------------------------------------------------------------------
     #  Add functionality to plot plot the learned data manifold after
     #  if required (i.e., if zdim == 2). You can use the make_grid
     #  functionality that is already imported.
     # --------------------------------------------------------------------
-    # plot hier waar in 2d space de datapunten liggen.
+    if ARGS.zdim == 2:
 
+        # create unit square
+        x = np.linspace(0.01, 0.99, 20)
+        y = np.linspace(0.01, 0.99, 20)
+        xv, yv = np.meshgrid(x, y)
+        unit_square = np.stack((np.ravel(xv), np.ravel(yv)), axis=-1)
 
+        # transform to gaussian using ppf
+        z = norm.ppf((unit_square))
+        z = torch.Tensor(z)
+
+        # run through decoder
+        imgs = model.decoder(z)
+
+        # plot manifold
+        plt.figure()
+        grid = make_grid(imgs.view(-1, 1, 28, 28), nrow=20)
+        npimg = grid.detach().numpy()
+        plt.imshow(np.transpose(npimg, (1, 2, 0)))
+        titlename = 'Data manifold'
+        plt.title(titlename)
+
+    # save elbo plot and show plots
     save_elbo_plot(train_curve, val_curve, 'elbo.pdf')
-
     plt.show()
+
+
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument('--epochs', default=40, type=int,
