@@ -167,9 +167,8 @@ def train(dataloader, discriminator, generator, optimizer_G, optimizer_D, device
                 loss_d.backward()
                 optimizer_D.step()
 
-
+            ##### MinMax #####
             else:
-                ##### MinMax #####
 
                 # sample from latent space
                 z = torch.randn(imgs.shape[0], args.latent_dim)
